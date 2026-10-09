@@ -8,8 +8,8 @@ const KEEP_DAYS = 14;
 // ---- IndexedDB ----
 let dbp;
 const db = () => (dbp ||= new Promise((res, rej) => {
-  const r = indexedDB.open("food-capture", 1);
-  r.onupgradeneeded = () => r.result.createObjectStore("meals", { keyPath: "id" });
+  const r = indexedDB.open("food-capture", 2);
+  r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains("meals")) d.createObjectStore("meals", { keyPath: "id" }); if (!d.objectStoreNames.contains("kv")) d.createObjectStore("kv"); };
   r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
 }));
 const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction("meals", mode), q = fn(t.objectStore("meals")); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
@@ -18,8 +18,12 @@ const put = m => tx("readwrite", s => s.put(m));
 const del = id => tx("readwrite", s => s.delete(id));
 
 // ---- settings (localStorage; token never leaves the phone except to api.github.com) ----
-const get = k => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
-const set = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+// Settings live in IndexedDB (survives refresh/relaunch in the iPhone home-screen app) with a localStorage copy.
+const KV = {};
+const kvGet = async k => { const d = await db(); return new Promise(res => { const q = d.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result || ""); q.onerror = () => res(""); }); };
+const kvSet = async (k, v) => { const d = await db(); return new Promise(res => { const t = d.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = res; t.onerror = res; }); };
+const get = k => { if (KV[k]) return KV[k]; try { return localStorage.getItem(k) || ""; } catch { return ""; } };
+const set = (k, v) => { KV[k] = v; kvSet(k, v); try { localStorage.setItem(k, v); } catch {} };
 const repo = () => get("fc-repo") || "pethebi/food-inbox";
 
 // ---- helpers ----
@@ -123,9 +127,11 @@ $("list").onclick = async e => {
   if (dl && confirm("Remove this meal from the phone?")) { await del(dl); render(); }
 };
 $("syncBtn").onclick = sync;
-$("token").value = get("fc-token"); $("repo").value = repo();
-$("saveSet").onclick = () => { set("fc-token", $("token").value.trim()); set("fc-repo", $("repo").value.trim() || "pethebi/food-inbox"); status("Settings saved."); sync(); };
+const showTok = () => { const t = get("fc-token"); $("tokState").textContent = t ? `✓ Token saved (…${t.slice(-4)})` : "No token saved yet"; };
+const saveSettings = () => { const t = $("token").value.trim(); if (t) set("fc-token", t); set("fc-repo", $("repo").value.trim() || "pethebi/food-inbox"); $("token").value = ""; showTok(); };
+$("token").addEventListener("change", saveSettings); $("repo").addEventListener("change", saveSettings);
+$("saveSet").onclick = () => { saveSettings(); status("Settings saved."); sync(); };
 window.addEventListener("online", sync);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
-render().then(sync);
+(async () => { for (const k of ["fc-token", "fc-repo"]) { const v = await kvGet(k); if (v) KV[k] = v; else if (get(k)) kvSet(k, get(k)); } $("repo").value = repo(); showTok(); await render(); sync(); })();

@@ -1,5 +1,5 @@
 // Food Capture service worker: cache the app shell so it opens offline. Bump VERSION on changes.
-const VERSION = "fc-v2";
+const VERSION = "fc-v3";
 const SHELL = ["./", "index.html", "app.js", "manifest.webmanifest", "icon.svg", "icon-180.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())));

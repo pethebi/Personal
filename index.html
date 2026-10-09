@@ -67,7 +67,8 @@ textarea{min-height:72px}
 
 <details class="card" id="settings"><summary style="font-weight:600">Settings</summary>
   <label for="token">GitHub token (stays on this phone)</label>
-  <input type="password" id="token" autocomplete="off" placeholder="github_pat_…">
+  <div class="msg" id="tokState"></div>
+  <input type="password" id="token" autocomplete="off" placeholder="paste a new token to replace">
   <label for="repo">Inbox repo</label>
   <input id="repo" placeholder="pethebi/food-inbox">
   <div class="row" style="margin-top:10px"><button type="button" id="saveSet">Save settings</button></div>
