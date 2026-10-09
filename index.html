@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Food Capture</title>
+<meta name="description" content="Offline photo + note food log for Mike's tracker.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Food Capture">
+<meta name="theme-color" content="#0b0b0b">
+<style>
+:root{--bg:#fcfcfb;--panel:#f3f3f1;--line:#dededa;--ink:#0b0b0b;--ink2:#52514e;--ink3:#6b6a64;--ok:#127a55;--wait:#9a6400;--bad:#c23b3a;--acc:#2a78d6}
+@media (prefers-color-scheme:dark){:root{--bg:#1a1a19;--panel:#232322;--line:#3a3a38;--ink:#fff;--ink2:#c3c2b7;--ink3:#a9a89f;--ok:#3fbf8f;--wait:#e0a83a;--bad:#ef7a79;--acc:#5a9cec}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom));overflow-wrap:anywhere}
+h1{font-size:22px;margin:14px 0 2px}.sub{color:var(--ink3);font-size:14px;margin:0 0 12px}
+button,.btn{font:600 17px -apple-system,system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;min-height:48px;padding:0 16px;cursor:pointer}
+.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.big{width:100%;min-height:64px;font-size:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
+label{display:block;font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin:10px 0 4px}
+input,textarea,select{width:100%;font:17px -apple-system,system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+textarea{min-height:72px}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
+.ph{position:relative}.ph img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
+.ph .n{position:absolute;left:4px;top:4px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:700;border-radius:10px;padding:1px 7px}
+.ph .x{position:absolute;right:4px;top:4px;min-height:28px;width:28px;padding:0;border-radius:14px;font-size:15px}
+.ph input{margin-top:4px;font-size:14px;padding:6px}
+.hunger{display:flex;gap:6px}.hunger button{flex:1;min-height:44px;padding:0}
+.hunger button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.meal{display:flex;gap:10px;align-items:flex-start}.meal img{width:64px;height:64px;object-fit:cover;border-radius:8px;flex:none}
+.meal .t{font-weight:600}.meal .d{color:var(--ink2);font-size:15px}
+.st{font-size:13px;font-weight:700;white-space:nowrap}.st.sent{color:var(--ok)}.st.wait{color:var(--wait)}.st.err{color:var(--bad)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:18px 0 4px}
+.msg{font-size:15px;color:var(--ink2);min-height:22px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<h1>Food Capture</h1>
+<p class="sub">Photos + a note. Works offline; sends itself when you're online.</p>
+<div id="status" class="msg"></div>
+
+<button class="primary big" id="newBtn" type="button">📷 Add meal</button>
+
+<div class="card hide" id="form">
+  <input type="file" id="cam" accept="image/*" capture="environment" class="hide">
+  <input type="file" id="lib" accept="image/*" multiple class="hide">
+  <div class="row"><button type="button" id="camBtn">📷 Take photo</button><button type="button" id="libBtn">🖼 From library</button></div>
+  <div class="photos" id="photos"></div>
+  <p class="sub" style="margin:6px 0 0">Adding to the same bowl? Take another photo after each ingredient; they stay in order.</p>
+  <label for="note">What is it? (brand, amount)</label>
+  <textarea id="note" placeholder="e.g. Greek yogurt 1 cup + ½ cup blueberries + 1 tbsp PB"></textarea>
+  <div class="row">
+    <div><label for="when">Time</label><input type="datetime-local" id="when"></div>
+    <div><label for="meal">Meal</label><select id="meal"><option value="">Auto</option><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option><option>Late-night snack</option></select></div>
+  </div>
+  <label>Hunger before eating (optional)</label>
+  <div class="hunger" id="hunger"><button type="button" data-h="1">1</button><button type="button" data-h="2">2</button><button type="button" data-h="3">3</button><button type="button" data-h="4">4</button><button type="button" data-h="5">5</button></div>
+  <div class="row" style="margin-top:14px"><button type="button" id="cancelBtn">Cancel</button><button type="button" class="primary" id="saveBtn">Save meal</button></div>
+</div>
+
+<div class="bar"><b>Recent meals</b><button type="button" id="syncBtn" style="min-height:40px">Send now</button></div>
+<div id="list"></div>
+
+<details class="card" id="settings"><summary style="font-weight:600">Settings</summary>
+  <label for="token">GitHub token (stays on this phone)</label>
+  <input type="password" id="token" autocomplete="off" placeholder="github_pat_…">
+  <label for="repo">Inbox repo</label>
+  <input id="repo" placeholder="pethebi/food-inbox">
+  <div class="row" style="margin-top:10px"><button type="button" id="saveSet">Save settings</button></div>
+  <p class="sub">Meals that were sent are kept here 14 days, then cleared. Unsent meals are never cleared.</p>
+</details>
+<script src="app.js"></script>
+</body>
+</html>

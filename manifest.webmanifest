@@ -1,0 +1,13 @@
+{
+  "name": "Food Capture",
+  "short_name": "Food Capture",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fcfcfb",
+  "theme_color": "#0b0b0b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
