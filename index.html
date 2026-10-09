@@ -15,14 +15,14 @@
 :root{--bg:#fcfcfb;--panel:#f3f3f1;--line:#dededa;--ink:#0b0b0b;--ink2:#52514e;--ink3:#6b6a64;--ok:#127a55;--wait:#9a6400;--bad:#c23b3a;--acc:#2a78d6}
 @media (prefers-color-scheme:dark){:root{--bg:#1a1a19;--panel:#232322;--line:#3a3a38;--ink:#fff;--ink2:#c3c2b7;--ink3:#a9a89f;--ok:#3fbf8f;--wait:#e0a83a;--bad:#ef7a79;--acc:#5a9cec}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom));overflow-wrap:anywhere}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 -apple-system,system-ui,sans-serif;padding:calc(env(safe-area-inset-top) + 8px) 16px calc(24px + env(safe-area-inset-bottom));overflow-wrap:anywhere}
 h1{font-size:22px;margin:14px 0 2px}.sub{color:var(--ink3);font-size:14px;margin:0 0 12px}
 button,.btn{font:600 17px -apple-system,system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;min-height:48px;padding:0 16px;cursor:pointer}
 .primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .big{width:100%;min-height:64px;font-size:20px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
 label{display:block;font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin:10px 0 4px}
-input,textarea,select{width:100%;font:17px -apple-system,system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+input,textarea,select{width:100%;min-width:0;max-width:100%;display:block;-webkit-appearance:none;appearance:none;font:17px -apple-system,system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
 textarea{min-height:72px}
 .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
@@ -55,10 +55,8 @@ textarea{min-height:72px}
   <p class="sub" style="margin:6px 0 0">Adding to the same bowl? Take another photo after each ingredient; they stay in order.</p>
   <label for="note">What is it? (brand, amount)</label>
   <textarea id="note" placeholder="e.g. Greek yogurt 1 cup + ½ cup blueberries + 1 tbsp PB"></textarea>
-  <div class="row">
-    <div><label for="when">Time</label><input type="datetime-local" id="when"></div>
-    <div><label for="meal">Meal</label><select id="meal"><option value="">Auto</option><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option><option>Late-night snack</option></select></div>
-  </div>
+  <label for="when">Time</label><input type="datetime-local" id="when">
+  <label for="meal">Meal</label><select id="meal"><option value="">Auto</option><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option><option>Late-night snack</option></select>
   <label>Hunger before eating (optional)</label>
   <div class="hunger" id="hunger"><button type="button" data-h="1">1</button><button type="button" data-h="2">2</button><button type="button" data-h="3">3</button><button type="button" data-h="4">4</button><button type="button" data-h="5">5</button></div>
   <div class="row" style="margin-top:14px"><button type="button" id="cancelBtn">Cancel</button><button type="button" class="primary" id="saveBtn">Save meal</button></div>
