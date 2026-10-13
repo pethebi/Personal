@@ -76,8 +76,8 @@ async function render() {
   const ms = (await all()).sort((a, b) => (a.time < b.time ? 1 : -1));
   $("list").innerHTML = ms.length ? ms.map(m => `<div class="card meal">${m.photos[0] ? `<img src="${m.photos[0].data}" alt="">` : ""}<div style="flex:1;min-width:0">
     <div class="t">${esc(m.meal || "Meal")} · ${fmt(m.time)}</div><div class="d">${esc(m.note) || "<i>no note</i>"}${m.photos.length > 1 ? ` · ${m.photos.length} photos` : ""}</div>
-    <div class="row" style="margin-top:6px;align-items:center"><span class="st ${m.status === "sent" ? "sent" : m.error ? "err" : "wait"}">${m.status === "sent" ? "✓ sent" : m.error ? "⚠ " + esc(m.error) : "⏳ waiting to send"}</span>
-    ${m.status === "sent" ? `<button type="button" data-del="${m.id}" style="min-height:36px;flex:0 0 auto">Remove</button>` : `<button type="button" data-edit="${m.id}" style="min-height:36px;flex:0 0 auto">Edit</button><button type="button" data-del="${m.id}" style="min-height:36px;flex:0 0 auto">Delete</button>`}</div></div></div>`).join("") : `<p class="sub">No meals yet.</p>`;
+    <div class="st ${m.status === "sent" ? "sent" : m.error ? "err" : "wait"}" style="margin-top:6px;white-space:normal">${m.status === "sent" ? "✓ sent" : m.error ? "⚠ " + esc(m.error) : "⏳ waiting to send"}</div>
+    <div class="row" style="margin-top:6px;justify-content:flex-end">${m.status === "sent" ? `<button type="button" data-del="${m.id}" style="min-height:36px;flex:0 0 auto">Remove</button>` : `<button type="button" data-edit="${m.id}" style="min-height:36px;flex:0 0 auto">Edit</button><button type="button" data-del="${m.id}" style="min-height:36px;flex:0 0 auto">Delete</button>`}</div></div></div>`).join("") : `<p class="sub">No meals yet.</p>`;
 }
 
 // ---- upload to GitHub (Contents API), one file per meal ----
