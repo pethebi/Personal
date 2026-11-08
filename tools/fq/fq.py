@@ -6,6 +6,7 @@ The LLM only does what code can't: look at photos and estimate nutrition. Everyt
 
   python tools/fq/fq.py stage   [--days DIR]          decode tools/queue/phone/*.json, list captures (+ duplicate candidates)
   python tools/fq/fq.py apply   --day F --meal M [--replace MEAL_ID] [--out F2]   add/replace a meal in a day doc
+  python tools/fq/fq.py fix     --day F [--out F2]     REQUIRED before any days/<date> write: collapse meals within 60 min, validate
   python tools/fq/fq.py totals  --day F                totals per meal + day (kcal, protein, carbs, fat, fiber)
   python tools/fq/fq.py done                           mark staged inbox files done, clear tools/queue/phone
   python tools/fq/fq.py garmin  --pull F               merge a garmin-pull.js result, write db kv docs to tools/fq/out/
@@ -21,6 +22,7 @@ PHONE = os.path.join(ROOT, "tools", "queue", "phone")
 DATA = os.path.join(ROOT, "tools", "data")
 OUT = os.path.join(ROOT, "tools", "fq", "out")
 MATCH_MIN = 45  # Mike 10/13: same meal in Food Capture + app within 45 min = one meal
+SAME_MEAL_MIN = 60  # Mike 10/9 + 10/19: any meals within 60 min of a meal's start are ONE stored meal (= calc.js)
 ITEM_KEYS = {"n": str, "k": (int, float), "p": (int, float), "f": (int, float), "c": (int, float), "fi": (int, float), "errPct": (int, float), "basis": str}
 
 
@@ -93,6 +95,45 @@ def cmd_stage(a):
     print(json.dumps({"captures": caps}, indent=1, ensure_ascii=False))
 
 
+# ---------- meal rule (same as calc.js collapseMeals) ----------
+def food_mins(t):
+    m = mins(t)
+    return None if m is None else (m + 1440 if m < 240 else m)  # midnight-3:59 = late evening
+
+
+def collapse(meals):
+    timed = sorted([m for m in meals if food_mins(m.get("time")) is not None], key=lambda m: food_mins(m["time"]))
+    untimed = [m for m in meals if food_mins(m.get("time")) is None]
+    out = []
+    for m in timed:
+        g = out[-1] if out else None
+        if g and food_mins(m["time"]) - food_mins(g["time"]) <= SAME_MEAL_MIN:
+            g["items"] = g.get("items", []) + m.get("items", [])
+            if re.match(r"(?i)^snack", g.get("name") or "") and m.get("name") and not re.match(r"(?i)^snack", m["name"]):
+                g["name"] = m["name"]
+            if g.get("hunger") is None and m.get("hunger") is not None:
+                g["hunger"] = m["hunger"]
+            for k in ("photoAssets", "tags"):
+                if m.get(k):
+                    g[k] = list(dict.fromkeys((g.get(k) or []) + m[k]))
+            print(f"  merged {m.get('name')} {m['time']} into {g.get('name')} {g['time']} (within {SAME_MEAL_MIN} min)")
+        else:
+            out.append(dict(m, items=list(m.get("items", []))))
+    return out + untimed
+
+
+def cmd_fix(a):
+    day = day_body(load(a.day))
+    errs = [e for m in day.get("meals", []) for e in check_items(m.get("items", []))]
+    if errs:
+        print("warning, invalid items (older days predate some fields):\n  " + "\n  ".join(errs[:5]))
+    day["meals"] = collapse(day.get("meals", []))
+    out = a.out or a.day + ".new"
+    save(out, day)
+    print(f"wrote {out}  ({len(day['meals'])} meals)")
+    print_totals(day)
+
+
 # ---------- apply ----------
 def check_items(items):
     errs = []
@@ -129,9 +170,10 @@ def cmd_apply(a):
         meals[idx] = meal
     else:
         meals.append(meal)
+    day["meals"] = collapse(meals)
     out = a.out or a.day + ".new"
     save(out, day)
-    print(f"wrote {out}  ({len(meals)} meals)")
+    print(f"wrote {out}  ({len(day['meals'])} meals)")
     print_totals(day)
 
 
@@ -193,6 +235,20 @@ def cmd_garmin(a):
         added += 1
     ga["activities"].sort(key=lambda x: x.get("start", ""))
     save(ga_p, ga)
+    # 10/24: time in zone + watch per activity (garmin-pull.js "zones"/"devs"), appended by start time; build_daily.py reads both
+    for fname, key in (("garmin_zones.json", "zones"), ("garmin_devices.json", "devs")):
+        fp = os.path.join(DATA, fname); doc = load(fp); seen = {r[0] for r in doc["rows"]}
+        new = [r for r in pull.get(key, []) if r[0] not in seen]
+        if new:
+            doc["rows"] = sorted(doc["rows"] + new, key=lambda r: r[0], reverse=True); doc["pulled"] = datetime.now().isoformat(timespec="seconds"); save(fp, doc)
+        print(f"{fname}: {len(new)} new")
+    # 10/26: each kv/garmin activity carries its zone seconds (zs) so the app's live overlay (core/live.js) counts new
+    # workouts right after a pull, without a PC rebuild of acts/<year>.
+    zrows = {str(r[0])[:16].replace("T", " "): r[2] for r in load(os.path.join(DATA, "garmin_zones.json"))["rows"] if r[2]}
+    for x in ga["activities"]:
+        z = zrows.get(x.get("start", "").replace("T", " "))
+        if z:
+            x["zs"] = z
     daily_objs = [dict(zip(COLS, r)) for r in gd["days"]]
     save(os.path.join(OUT, "kv_garminDaily.json"), {"key": "garminDaily", "value": daily_objs})
     save(os.path.join(OUT, "kv_garmin.json"), {"key": "garmin", "value": ga["activities"]})
@@ -206,6 +262,7 @@ def main():
     s = sp.add_parser("stage"); s.add_argument("--days"); s.set_defaults(fn=cmd_stage)
     s = sp.add_parser("apply"); s.add_argument("--day", required=True); s.add_argument("--meal", required=True)
     s.add_argument("--replace"); s.add_argument("--out"); s.set_defaults(fn=cmd_apply)
+    s = sp.add_parser("fix"); s.add_argument("--day", required=True); s.add_argument("--out"); s.set_defaults(fn=cmd_fix)
     s = sp.add_parser("totals"); s.add_argument("--day", required=True); s.set_defaults(fn=cmd_totals)
     s = sp.add_parser("done"); s.set_defaults(fn=cmd_done)
     s = sp.add_parser("garmin"); s.add_argument("--pull", required=True); s.set_defaults(fn=cmd_garmin)
