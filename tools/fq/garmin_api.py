@@ -11,7 +11,7 @@ Usage: python tools/fq/garmin_api.py [--days 3] [--acts 8] [--probe] [--merge-kv
   --probe: only check the key works and list the field names of one daily summary + one activity (no values).
 No calorie fields are used (Mike's rule).
 """
-import argparse, datetime as dt, json, os, sys, urllib.request, urllib.error
+import argparse, tempfile, datetime as dt, json, os, sys, urllib.request, urllib.error
 from pathlib import Path
 
 HOST = "https://personal.connectapi.garmin.com"
@@ -55,6 +55,18 @@ def call(path, auth, method="GET"):
         sys.exit(f"Garmin API {method} {path.split('?')[0]} -> HTTP {e.code}")
 
 
+def local_today():
+    """Mike's date in Denver (11/8 bug: the cloud runs on UTC, so evenings became tomorrow)."""
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.datetime.now(ZoneInfo("America/Denver")).date()
+    except Exception:  # no tz database (Windows without tzdata): US Mountain = UTC-7, UTC-6 in daylight time
+        u = dt.datetime.now(dt.timezone.utc); y = u.year
+        start = dt.datetime(y, 3, 8 + (6 - dt.date(y, 3, 8).weekday()) % 7, 9, tzinfo=dt.timezone.utc)
+        end = dt.datetime(y, 11, 1 + (6 - dt.date(y, 11, 1).weekday()) % 7, 8, tzinfo=dt.timezone.utc)
+        return (u - dt.timedelta(hours=6 if start <= u < end else 7)).date()
+
+
 def token():
     t = call("/personalapitoken-service/personal-api/personal-api-key/token", "ApiKey " + api_key(), "POST")
     if isinstance(t, dict):
@@ -75,7 +87,7 @@ def main():
     ap.add_argument("--merge-kv")
     a = ap.parse_args()
     auth = token()
-    today = dt.date.today()
+    today = local_today()
     if a.probe:
         s = call(f"/usersummary-service/usersummary/daily?calendarDate={today}", auth)
         acts = call(f"/activitylist-service/activities/search/activities?limit=1", auth) or []
@@ -88,8 +100,8 @@ def main():
         d = (today - dt.timedelta(days=i)).isoformat()
         s = call(f"/usersummary-service/usersummary/daily?calendarDate={d}", auth)
         hr = call(f"/wellness-service/wellness/dailyHeartRate?date={d}", auth)
-        if not isinstance(s, dict):
-            continue
+        if not isinstance(s, dict) or s.get("totalSteps") is None:
+            continue  # 11/9: watch not synced yet -> skip, don't save a blank day
         z2 = ab = w = 0.0
         v = (hr or {}).get("heartRateValues") or []
         for j, (t0, x) in enumerate(v):
@@ -112,9 +124,10 @@ def main():
         if any(z):
             zones.append([x.get("startTimeLocal"), x.get("activityId"), z, [97, 116, 135, 154, 174]])  # zone lows as pulled 11/7 (list endpoint has no boundaries)
         devs.append([x.get("startTimeLocal"), x.get("activityId"), x.get("deviceId") or 0, x.get("manufacturer") or ""])
-    OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(json.dumps({"daily": daily, "acts": rows, "zones": zones, "devs": devs}), encoding="utf-8")
-    print(f"wrote {OUT}: {len(daily)} day(s), {len(rows)} activities, {len(zones)} with zone time")
+    out = Path(tempfile.gettempdir()) / "garmin-pull.json" if a.merge_kv else OUT  # cloud: keep raw data out of the repo folder
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps({"daily": daily, "acts": rows, "zones": zones, "devs": devs}), encoding="utf-8")
+    print(f"wrote {out}: {len(daily)} day(s), {len(rows)} activities, {len(zones)} with zone time")
     if a.merge_kv:
         merge_kv(Path(a.merge_kv), daily, rows, zones)
 
